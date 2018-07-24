@@ -20,12 +20,12 @@ namespace Hackathon_MessAround_ConsoleApp1
 
     public class NorthWind
     {
-        public Query<Customer> integers;
+        public BaseQuery<Customer> integers;
 
         public NorthWind()
         {
-            QueryProvider provider = new GPUQueryProvider(null);
-            this.integers = new Query<Customer>(provider);
+            BaseQueryProvider provider = new GPUQueryProvider(null);
+            this.integers = new BaseQuery<Customer>(provider);
         }
     }
 

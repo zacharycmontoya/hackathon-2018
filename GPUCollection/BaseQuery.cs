@@ -10,9 +10,9 @@ namespace GPUCollection
     /// <summary>
     /// Boilerplate code from https://blogs.msdn.microsoft.com/mattwar/2007/07/30/linq-building-an-iqueryable-provider-part-i/
     /// </summary>
-    public class Query<T> : IOrderedQueryable<T>
+    public class BaseQuery<T> : IOrderedQueryable<T>
     {
-        private QueryProvider queryProvider;
+        private BaseQueryProvider queryProvider;
         public IQueryProvider Provider {
             get { return this.queryProvider; }
         }
@@ -23,7 +23,7 @@ namespace GPUCollection
             get { return typeof(T); }
         }
 
-        public Query(QueryProvider provider)
+        public BaseQuery(BaseQueryProvider provider)
         {
             if (provider == null)
             {
@@ -34,7 +34,7 @@ namespace GPUCollection
             Expression = Expression.Constant(this);
         }
 
-        public Query(QueryProvider provider, Expression expression)
+        public BaseQuery(BaseQueryProvider provider, Expression expression)
         {
             if (provider == null)
             {

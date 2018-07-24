@@ -9,7 +9,7 @@ namespace GPUCollection
     /// <summary>
     /// Boilerplate code from https://blogs.msdn.microsoft.com/mattwar/2007/07/31/linq-building-an-iqueryable-provider-part-ii/
     /// </summary>
-    public class GPUQueryProvider : QueryProvider
+    public class GPUQueryProvider : BaseQueryProvider
     {
         Object arg;
 
