@@ -26,6 +26,11 @@ namespace GPUOperations
 
         public static float[] Add(string objPath)
         {
+            using (var fileStream = File.Create("AddArray.dxil"))
+            {
+                ShaderCompilation.CompileFromFile("AddArray.hlsl", "CSMain", "cs_5_0").Bytecode.Save(fileStream);
+            }
+
             objPath = "AddArray.dxil";
 
             using (var fileStream = File.OpenRead(objPath))
@@ -93,6 +98,8 @@ namespace GPUOperations
                 new RootParameter(ShaderVisibility.All, new RootDescriptor(1, 0), RootParameterType.ShaderResourceView),
                 new RootParameter(ShaderVisibility.All, new RootDescriptor(0, 0), RootParameterType.UnorderedAccessView)
             };
+            var rootSignatureDesc = new RootSignatureDescription(RootSignatureFlags.AllowInputAssemblerInputLayout, rootParameters);
+
             RootSignature computeRootSignature = DirectXHelpers.CreateRootSignature(device, rootParameters);
             PipelineState computePipelineState = DirectXHelpers.CreateComputePipelineState(device, computeRootSignature, AddArrayShaderCode);
 

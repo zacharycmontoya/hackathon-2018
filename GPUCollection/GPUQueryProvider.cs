@@ -33,9 +33,12 @@ namespace GPUCollection
 
 
             // Get the results of the pipeline
-            //return GPUOperations.Operations.Add(objPath); 
+            float[] result = GPUOperations.Operations.Add(objPath);
+            //foreach(var resultItem in result)
+                Console.WriteLine(result.Length);
 
-            return new int[] { };
+            return result;
+            //return new int[] { };
 
             /*
             return Activator.CreateInstance(
