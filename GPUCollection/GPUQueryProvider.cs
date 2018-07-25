@@ -12,6 +12,7 @@ namespace GPUCollection
     public class GPUQueryProvider : BaseQueryProvider
     {
         Object arg;
+        string objPath;
 
         public GPUQueryProvider(Object arg)
         {
@@ -25,11 +26,17 @@ namespace GPUCollection
 
         public override object Execute(Expression expression)
         {
+            objPath = "expression.bc";
             Type elementType = TypeSystem.GetElementType(expression.Type);
-            this.Translate(expression); // Call translate to compile the expression to LLVM
-            // Call something to take the LLVM module and run it through the rest of the pipeline
+            this.Translate(expression, objPath); // Call translate to compile the expression to LLVM
+            // LLVM IR to DXIL transition here
+
+
             // Get the results of the pipeline
-            return new int[] { }; // Actually return a useful IEnumerable later
+            //return GPUOperations.Operations.Add(objPath); 
+
+            return new int[] { };
+
             /*
             return Activator.CreateInstance(
                 typeof(ObjectReader<>).MakeGenericType(elementType),
@@ -39,9 +46,9 @@ namespace GPUCollection
             */
         }
 
-        private string Translate(Expression expression)
+        private string Translate(Expression expression, string objPath = null)
         {
-            return new QueryTranslator().Translate(expression);
+            return new QueryTranslator().Translate(expression, objPath);
         }
     }
 }

@@ -5,21 +5,27 @@
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <LangVersion>7.3</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <LangVersion>7.3</LangVersion>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="LLVMSharp" Version="5.0.0" />
+    <PackageReference Include="SharpDX" Version="4.2.0-ci259" />
+    <PackageReference Include="SharpDX.D3DCompiler" Version="4.1.0" />
+    <PackageReference Include="SharpDX.Direct3D12" Version="4.1.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\GPUOperations\GPUOperations.csproj" />
+    <None Update="AddArray.dxil">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="AddArray.hlsl">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>
