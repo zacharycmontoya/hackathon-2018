@@ -3,9 +3,11 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.27703.2035
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Hackathon_MessAround_ConsoleApp1", "Hackathon_MessAround_ConsoleApp1\Hackathon_MessAround_ConsoleApp1.csproj", "{A91C60BF-F3B8-4D8F-9A89-C07D05DB40C9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Hackathon_MessAround_ConsoleApp1", "Hackathon_MessAround_ConsoleApp1\Hackathon_MessAround_ConsoleApp1.csproj", "{A91C60BF-F3B8-4D8F-9A89-C07D05DB40C9}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GPUCollection", "GPUCollection\GPUCollection.csproj", "{D3744AF5-AFCB-4F6B-BC30-D830C0450767}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "GPUCollection", "GPUCollection\GPUCollection.csproj", "{D3744AF5-AFCB-4F6B-BC30-D830C0450767}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GPUOperations", "GPUOperations\GPUOperations.csproj", "{AFC86A85-692F-4261-A5F6-5F7FB6DBB766}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -21,6 +23,10 @@ Global
 		{D3744AF5-AFCB-4F6B-BC30-D830C0450767}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D3744AF5-AFCB-4F6B-BC30-D830C0450767}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D3744AF5-AFCB-4F6B-BC30-D830C0450767}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AFC86A85-692F-4261-A5F6-5F7FB6DBB766}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AFC86A85-692F-4261-A5F6-5F7FB6DBB766}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AFC86A85-692F-4261-A5F6-5F7FB6DBB766}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AFC86A85-692F-4261-A5F6-5F7FB6DBB766}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -24,7 +24,12 @@ namespace GPUCollection
             string bitCodePath = this.EmitBitCode(expression); // Call translate to compile the expression to LLVM
             // Call something to take the LLVM module and run it through the rest of the pipeline
             // Get the results of the pipeline
-            return new int[] { }; // Actually return a useful IEnumerable later
+            float[] result = GPUOperations.Operations.Add(bitCodePath);
+            int[] tempResult = Array.ConvertAll(result, x => (int)x); // Temporarily convert all results to int since we can only handle ints right now
+            Console.WriteLine(tempResult.Length);
+            return tempResult;
+            //return new int[] { };
+
             /*
             return Activator.CreateInstance(
                 typeof(ObjectReader<>).MakeGenericType(elementType),
