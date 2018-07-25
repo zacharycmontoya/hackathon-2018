@@ -1,4 +1,5 @@
-﻿using System;
+﻿using LLVMSharp;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
@@ -11,7 +12,13 @@ namespace GPUCollection
     /// </summary>
     class QueryTranslator : ExpressionVisitor
     {
+        private const string ModuleNameString = "GPUCollection";
+
         StringBuilder sb;
+        LLVMValueRef lastLLVMFunctionCalledFromMain;
+        LLVMModuleRef module;
+        LLVMBuilderRef mainBuilder;
+        int functionNumber;
 
         internal QueryTranslator()
         {
@@ -21,8 +28,36 @@ namespace GPUCollection
         internal string Translate(Expression expression)
         {
             this.sb = new StringBuilder();
+            InitializeLLVMWriting();
             this.Visit(expression);
+            FinalizeLLVMWriting();
             return this.sb.ToString();
+        }
+
+        /// <summary>
+        /// Modifiying https://github.com/paulsmith/getting-started-llvm-c-api/blob/master/sum.c
+        /// </summary>
+        private void InitializeLLVMWriting()
+        {
+            functionNumber = 0;
+            module = LLVM.ModuleCreateWithName(ModuleNameString);
+            LLVMTypeRef mainRetType = LLVM.FunctionType(LLVM.Int32Type(), new LLVMTypeRef[0], false);
+            LLVMValueRef mainFunc = LLVM.AddFunction(module, "main", mainRetType);
+            mainBuilder = LLVM.CreateBuilder();
+            LLVMBasicBlockRef mainBlock = LLVM.AppendBasicBlock(mainFunc, "MainEntry");
+            LLVM.PositionBuilderAtEnd(mainBuilder, mainBlock);
+        }
+
+        /// <summary>
+        /// Modifiying https://github.com/paulsmith/getting-started-llvm-c-api/blob/master/sum.c
+        /// </summary>
+        private void FinalizeLLVMWriting()
+        {
+            LLVM.BuildRet(mainBuilder, lastLLVMFunctionCalledFromMain);
+
+            string outErrorMessage;
+            LLVM.VerifyModule(module, LLVMVerifierFailureAction.LLVMAbortProcessAction, out outErrorMessage);
+            LLVM.WriteBitcodeToFile(module, "test.bc");
         }
 
         private static Expression StripQuotes(Expression e)
@@ -41,6 +76,12 @@ namespace GPUCollection
                 sb.Append("SELECT * FROM (");
                 this.Visit(m.Arguments[0]);
                 sb.Append(") AS T WHERE ");
+                LambdaExpression lambda = (LambdaExpression)StripQuotes(m.Arguments[1]);
+                this.Visit(lambda.Body);
+                return m;
+            }
+            else if (m.Method.DeclaringType == typeof(Queryable) && m.Method.Name == "Select")
+            {
                 LambdaExpression lambda = (LambdaExpression)StripQuotes(m.Arguments[1]);
                 this.Visit(lambda.Body);
                 return m;
@@ -70,29 +111,20 @@ namespace GPUCollection
             this.Visit(b.Left);
             switch (b.NodeType)
             {
-                case ExpressionType.And:
-                    sb.Append(" AND ");
-                    break;
-                case ExpressionType.Or:
-                    sb.Append(" OR ");
-                    break;
-                case ExpressionType.Equal:
-                    sb.Append(" = ");
-                    break;
-                case ExpressionType.NotEqual:
-                    sb.Append(" <> ");
-                    break;
-                case ExpressionType.LessThan:
-                    sb.Append(" < ");
-                    break;
-                case ExpressionType.LessThanOrEqual:
-                    sb.Append(" <= ");
-                    break;
-                case ExpressionType.GreaterThan:
-                    sb.Append(" > ");
-                    break;
-                case ExpressionType.GreaterThanOrEqual:
-                    sb.Append(" >= ");
+                case ExpressionType.Add:
+                    LLVMTypeRef[] sumParamTypes = new LLVMTypeRef[] { LLVM.Int32Type(), LLVM.Int32Type() };
+                    LLVMTypeRef sumRetType = LLVM.FunctionType(LLVM.Int32Type(), sumParamTypes, false);
+                    LLVMValueRef sumFunc = LLVM.AddFunction(module, "sum" + functionNumber, sumRetType);
+
+                    LLVMBasicBlockRef entry = LLVM.AppendBasicBlock(sumFunc, "entry");
+
+                    LLVMBuilderRef sumBuilder = LLVM.CreateBuilder();
+                    LLVM.PositionBuilderAtEnd(sumBuilder, entry);
+                    LLVMValueRef tmp = LLVM.BuildAdd(sumBuilder, LLVM.GetParam(sumFunc, 0), LLVM.GetParam(sumFunc, 1), "Sum" + functionNumber + "Entry");
+                    LLVM.BuildRet(sumBuilder, tmp);
+                    lastLLVMFunctionCalledFromMain = LLVM.BuildCall(mainBuilder, sumFunc, new LLVMValueRef[] { LLVM.ConstInt(LLVM.Int32Type(), 3, new LLVMBool(0)), LLVM.ConstInt(LLVM.Int32Type(), 2, new LLVMBool(0)) }, "functioncall");
+
+                    functionNumber++;
                     break;
                 default:
                     throw new NotSupportedException(string.Format("The binary operator '{0}' is not supported", b.NodeType));
@@ -118,7 +150,7 @@ namespace GPUCollection
             }
             else
             {
-                switch (Type.GetTypeCode(c.Value.GetType()))
+                switch (System.Type.GetTypeCode(c.Value.GetType()))
                 {
                     case TypeCode.Boolean:
                         sb.Append(((bool)c.Value) ? 1 : 0);
