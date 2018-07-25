@@ -25,12 +25,12 @@ namespace GPUCollection
 
         }
 
-        internal string Translate(Expression expression)
+        internal string Translate(Expression expression, string objPath)
         {
             this.sb = new StringBuilder();
             InitializeLLVMWriting();
             this.Visit(expression);
-            FinalizeLLVMWriting();
+            FinalizeLLVMWriting(objPath);
             return this.sb.ToString();
         }
 
@@ -51,13 +51,13 @@ namespace GPUCollection
         /// <summary>
         /// Modifiying https://github.com/paulsmith/getting-started-llvm-c-api/blob/master/sum.c
         /// </summary>
-        private void FinalizeLLVMWriting()
+        private void FinalizeLLVMWriting(string objPath)
         {
             LLVM.BuildRet(mainBuilder, lastLLVMFunctionCalledFromMain);
 
             string outErrorMessage;
             LLVM.VerifyModule(module, LLVMVerifierFailureAction.LLVMAbortProcessAction, out outErrorMessage);
-            LLVM.WriteBitcodeToFile(module, "test.bc");
+            LLVM.WriteBitcodeToFile(module, objPath);
         }
 
         private static Expression StripQuotes(Expression e)
