@@ -10,19 +10,20 @@ namespace GPUCollection
     /// <summary>
     /// Boilerplate code from https://blogs.msdn.microsoft.com/mattwar/2007/07/31/linq-building-an-iqueryable-provider-part-ii/
     /// </summary>
-    class QueryTranslator : ExpressionVisitor
+    class QueryTranslator<T> : ExpressionVisitor
     {
         private const string ModuleNameString = "GPUCollection";
 
+        IEnumerable<T> data;
         StringBuilder sb;
         LLVMValueRef lastLLVMFunctionCalledFromMain;
         LLVMModuleRef module;
         LLVMBuilderRef mainBuilder;
         int functionNumber;
 
-        internal QueryTranslator()
+        internal QueryTranslator(IEnumerable<T> data)
         {
-
+            this.data = data;
         }
 
         internal string Translate(Expression expression)
@@ -109,30 +110,64 @@ namespace GPUCollection
         {
             sb.Append("(");
             this.Visit(b.Left);
-            switch (b.NodeType)
+
+            Type retType = b.Type;
+            LLVMTypeRef llvmRetType;
+
+            if (retType == typeof(Int32))
             {
-                case ExpressionType.Add:
-                    LLVMTypeRef[] sumParamTypes = new LLVMTypeRef[] { LLVM.Int32Type(), LLVM.Int32Type() };
-                    LLVMTypeRef sumRetType = LLVM.FunctionType(LLVM.Int32Type(), sumParamTypes, false);
-                    LLVMValueRef sumFunc = LLVM.AddFunction(module, "sum" + functionNumber, sumRetType);
-
-                    LLVMBasicBlockRef entry = LLVM.AppendBasicBlock(sumFunc, "entry");
-
-                    LLVMBuilderRef sumBuilder = LLVM.CreateBuilder();
-                    LLVM.PositionBuilderAtEnd(sumBuilder, entry);
-                    LLVMValueRef tmp = LLVM.BuildAdd(sumBuilder, LLVM.GetParam(sumFunc, 0), LLVM.GetParam(sumFunc, 1), "Sum" + functionNumber + "Entry");
-                    LLVM.BuildRet(sumBuilder, tmp);
-                    lastLLVMFunctionCalledFromMain = LLVM.BuildCall(mainBuilder, sumFunc, new LLVMValueRef[] { LLVM.ConstInt(LLVM.Int32Type(), 3, new LLVMBool(0)), LLVM.ConstInt(LLVM.Int32Type(), 2, new LLVMBool(0)) }, "functioncall");
-
-                    functionNumber++;
-                    break;
-                default:
-                    throw new NotSupportedException(string.Format("The binary operator '{0}' is not supported", b.NodeType));
+                llvmRetType = LLVM.Int32Type();
             }
+            else if (retType == typeof(Double))
+            {
+                llvmRetType = LLVM.DoubleType();
+            }
+            else if (retType == typeof(float))
+            {
+                llvmRetType = LLVM.FloatType();
+            }
+            else
+            {
+                throw new NotSupportedException(string.Format("The binary operator does not support operands of type '{0}' is not supported", retType.ToString()));
+            }
+
+            LLVMTypeRef[] opParamTypes = new LLVMTypeRef[] { llvmRetType, llvmRetType };
+            LLVMTypeRef opRetType = LLVM.FunctionType(llvmRetType, opParamTypes, false);
+            LLVMValueRef opFunc = LLVM.AddFunction(module, "op" + functionNumber, opRetType);
+
+            LLVMBasicBlockRef entry = LLVM.AppendBasicBlock(opFunc, "entry");
+
+            LLVMBuilderRef opBuilder = LLVM.CreateBuilder();
+            LLVM.PositionBuilderAtEnd(opBuilder, entry);
+            LLVMValueRef tmp = GenerateOp(b.NodeType, opBuilder, opFunc);
+            LLVM.BuildRet(opBuilder, tmp);
+
+            T[] dataInArray = data.ToArray();
+            if (retType == typeof(Int32))
+                lastLLVMFunctionCalledFromMain = LLVM.BuildCall(mainBuilder, opFunc, new LLVMValueRef[] { LLVM.ConstInt(llvmRetType, Convert.ToUInt64((object)dataInArray[0]), new LLVMBool(0)), LLVM.ConstInt(llvmRetType, Convert.ToUInt64((object)dataInArray[1]), new LLVMBool(0)) }, "functioncall");
+            else
+                throw new NotSupportedException(string.Format("The binary operator does not yet support return type '{0}'", retType.Name));
+
+            functionNumber++;
 
             this.Visit(b.Right);
             sb.Append(")");
             return b;
+        }
+
+        private LLVMValueRef GenerateOp(ExpressionType expressionType, LLVMBuilderRef opBuilder, LLVMValueRef opFunc)
+        {
+            string name = "op" + functionNumber + "Result";
+            switch (expressionType)
+            {
+                case ExpressionType.Add:
+                    return LLVM.BuildAdd(opBuilder, LLVM.GetParam(opFunc, 0), LLVM.GetParam(opFunc, 1), name);
+                case ExpressionType.Subtract:
+                    return LLVM.BuildSub(opBuilder, LLVM.GetParam(opFunc, 0), LLVM.GetParam(opFunc, 1), name);
+                default:
+                    throw new NotSupportedException(string.Format("The binary operator '{0}' is not supported", expressionType));
+            }
+
         }
 
         protected override Expression VisitConstant(ConstantExpression c)

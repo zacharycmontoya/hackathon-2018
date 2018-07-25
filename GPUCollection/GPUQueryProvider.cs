@@ -9,13 +9,13 @@ namespace GPUCollection
     /// <summary>
     /// Boilerplate code from https://blogs.msdn.microsoft.com/mattwar/2007/07/31/linq-building-an-iqueryable-provider-part-ii/
     /// </summary>
-    public class GPUQueryProvider : BaseQueryProvider
+    public class GPUQueryProvider<T> : BaseQueryProvider
     {
-        Object arg;
+        private IEnumerable<T> data;
 
-        public GPUQueryProvider(Object arg)
+        public GPUQueryProvider(IEnumerable<T> data)
         {
-            this.arg = arg;
+            this.data = data;
         }
 
         public override string GetQueryText(Expression expression)
@@ -41,7 +41,7 @@ namespace GPUCollection
 
         private string Translate(Expression expression)
         {
-            return new QueryTranslator().Translate(expression);
+            return new QueryTranslator<T>(data).Translate(expression);
         }
     }
 }
