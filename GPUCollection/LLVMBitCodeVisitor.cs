@@ -1,6 +1,7 @@
 ﻿using LLVMSharp;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
@@ -10,29 +11,28 @@ namespace GPUCollection
     /// <summary>
     /// Boilerplate code from https://blogs.msdn.microsoft.com/mattwar/2007/07/31/linq-building-an-iqueryable-provider-part-ii/
     /// </summary>
-    class QueryTranslator<T> : ExpressionVisitor
+    class LLVMBitCodeVisitor<T> : ExpressionVisitor
     {
         private const string ModuleNameString = "GPUCollection";
+        private const string BitCodeFilename = "test.bc";
 
         IEnumerable<T> data;
-        StringBuilder sb;
         LLVMValueRef lastLLVMFunctionCalledFromMain;
         LLVMModuleRef module;
         LLVMBuilderRef mainBuilder;
         int functionNumber;
 
-        internal QueryTranslator(IEnumerable<T> data)
+        internal LLVMBitCodeVisitor(IEnumerable<T> data)
         {
             this.data = data;
         }
 
-        internal string Translate(Expression expression)
+        internal string WalkTree(Expression expression)
         {
-            this.sb = new StringBuilder();
             InitializeLLVMWriting();
             this.Visit(expression);
-            FinalizeLLVMWriting();
-            return this.sb.ToString();
+            string bitCodeFilePath = FinalizeLLVMWriting();
+            return bitCodeFilePath;
         }
 
         /// <summary>
@@ -52,13 +52,19 @@ namespace GPUCollection
         /// <summary>
         /// Modifiying https://github.com/paulsmith/getting-started-llvm-c-api/blob/master/sum.c
         /// </summary>
-        private void FinalizeLLVMWriting()
+        private string FinalizeLLVMWriting()
         {
             LLVM.BuildRet(mainBuilder, lastLLVMFunctionCalledFromMain);
 
             string outErrorMessage;
             LLVM.VerifyModule(module, LLVMVerifierFailureAction.LLVMAbortProcessAction, out outErrorMessage);
-            LLVM.WriteBitcodeToFile(module, "test.bc");
+            string fullFilePath = Path.Combine(System.IO.Directory.GetCurrentDirectory(), BitCodeFilename);
+            if (LLVM.WriteBitcodeToFile(module, fullFilePath) != 0)
+            {
+                throw new IOException($"Unable to write to {fullFilePath}");
+            }
+
+            return fullFilePath;
         }
 
         private static Expression StripQuotes(Expression e)
@@ -74,9 +80,7 @@ namespace GPUCollection
         {
             if (m.Method.DeclaringType == typeof(Queryable) && m.Method.Name == "Where")
             {
-                sb.Append("SELECT * FROM (");
                 this.Visit(m.Arguments[0]);
-                sb.Append(") AS T WHERE ");
                 LambdaExpression lambda = (LambdaExpression)StripQuotes(m.Arguments[1]);
                 this.Visit(lambda.Body);
                 return m;
@@ -96,7 +100,7 @@ namespace GPUCollection
             switch (u.NodeType)
             {
                 case ExpressionType.Not:
-                    sb.Append(" NOT ");
+                    // TODO: something meaningful
                     this.Visit(u.Operand);
                     break;
                 default:
@@ -108,7 +112,6 @@ namespace GPUCollection
 
         protected override Expression VisitBinary(BinaryExpression b)
         {
-            sb.Append("(");
             this.Visit(b.Left);
 
             Type retType = b.Type;
@@ -151,7 +154,6 @@ namespace GPUCollection
             functionNumber++;
 
             this.Visit(b.Right);
-            sb.Append(")");
             return b;
         }
 
@@ -175,30 +177,27 @@ namespace GPUCollection
             IQueryable q = c.Value as IQueryable;
             if (q != null)
             {
-                // assume constant nodes w/ IQueryables are table references
-                sb.Append("SELECT * FROM ");
-                sb.Append(q.ElementType.Name);
+                // TODO: something meaningful
             }
             else if (c.Value == null)
             {
-                sb.Append("NULL");
+                // TODO: something meaningful
             }
             else
             {
                 switch (System.Type.GetTypeCode(c.Value.GetType()))
                 {
                     case TypeCode.Boolean:
-                        sb.Append(((bool)c.Value) ? 1 : 0);
+                        // TODO: something meaningful
                         break;
                     case TypeCode.String:
-                        sb.Append("'");
-                        sb.Append(c.Value);
-                        sb.Append("'");
+                        // TODO: something meaningful
+                        // sb.Append(c.Value);
                         break;
                     case TypeCode.Object:
                         throw new NotSupportedException(string.Format("The constant for '{0}' is not supported", c.Value));
                     default:
-                        sb.Append(c.Value);
+                        // TODO: something meaningful
                         break;
                 }
             }
@@ -210,7 +209,7 @@ namespace GPUCollection
         {
             if (m.Expression != null && m.Expression.NodeType == ExpressionType.Parameter)
             {
-                sb.Append(m.Member.Name);
+                // TODO: something meaningful
                 return m;
             }
             throw new NotSupportedException(string.Format("The member '{0}' is not supported", m.Member.Name));

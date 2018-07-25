@@ -12,10 +12,7 @@ namespace GPUCollection
     /// </summary>
     public class BaseQuery<T> : IOrderedQueryable<T>
     {
-        private BaseQueryProvider queryProvider;
-        public IQueryProvider Provider {
-            get { return this.queryProvider; }
-        }
+        public IQueryProvider Provider { get; private set; }
 
         public Expression Expression { get; private set; }
         public Type ElementType
@@ -30,7 +27,7 @@ namespace GPUCollection
                 throw new ArgumentNullException(nameof(provider));
             }
 
-            queryProvider = provider;
+            Provider = provider;
             Expression = Expression.Constant(this);
         }
 
@@ -51,23 +48,18 @@ namespace GPUCollection
                 throw new ArgumentOutOfRangeException(nameof(expression));
             }
 
-            queryProvider = provider;
+            Provider = provider;
             Expression = expression;
         }
 
         public IEnumerator<T> GetEnumerator()
         {
-            return ((IEnumerable<T>)queryProvider.Execute(Expression)).GetEnumerator();
+            return ((IEnumerable<T>)Provider.Execute(Expression)).GetEnumerator();
         }
 
         IEnumerator IEnumerable.GetEnumerator()
         {
-            return ((IEnumerable)queryProvider.Execute(Expression)).GetEnumerator();
-        }
-
-        public override string ToString()
-        {
-            return queryProvider.GetQueryText(Expression);
+            return ((IEnumerable)Provider.Execute(Expression)).GetEnumerator();
         }
     }
 }

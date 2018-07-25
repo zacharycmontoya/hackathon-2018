@@ -18,15 +18,10 @@ namespace GPUCollection
             this.data = data;
         }
 
-        public override string GetQueryText(Expression expression)
-        {
-            return this.Translate(expression);
-        }
-
         public override object Execute(Expression expression)
         {
             Type elementType = TypeSystem.GetElementType(expression.Type);
-            this.Translate(expression); // Call translate to compile the expression to LLVM
+            string bitCodePath = this.EmitBitCode(expression); // Call translate to compile the expression to LLVM
             // Call something to take the LLVM module and run it through the rest of the pipeline
             // Get the results of the pipeline
             return new int[] { }; // Actually return a useful IEnumerable later
@@ -39,9 +34,9 @@ namespace GPUCollection
             */
         }
 
-        private string Translate(Expression expression)
+        private string EmitBitCode(Expression expression)
         {
-            return new QueryTranslator<T>(data).Translate(expression);
+            return new LLVMBitCodeVisitor<T>(data).WalkTree(expression);
         }
     }
 }
