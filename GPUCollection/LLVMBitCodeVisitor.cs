@@ -1,6 +1,7 @@
 ﻿using LLVMSharp;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
@@ -10,28 +11,28 @@ namespace GPUCollection
     /// <summary>
     /// Boilerplate code from https://blogs.msdn.microsoft.com/mattwar/2007/07/31/linq-building-an-iqueryable-provider-part-ii/
     /// </summary>
-    class QueryTranslator : ExpressionVisitor
+    class LLVMBitCodeVisitor<T> : ExpressionVisitor
     {
         private const string ModuleNameString = "GPUCollection";
+        private const string BitCodeFilename = "test.bc";
 
-        StringBuilder sb;
+        IEnumerable<T> data;
         LLVMValueRef lastLLVMFunctionCalledFromMain;
         LLVMModuleRef module;
         LLVMBuilderRef mainBuilder;
         int functionNumber;
 
-        internal QueryTranslator()
+        internal LLVMBitCodeVisitor(IEnumerable<T> data)
         {
-
+            this.data = data;
         }
 
-        internal string Translate(Expression expression, string objPath)
+        internal string WalkTree(Expression expression)
         {
-            this.sb = new StringBuilder();
             InitializeLLVMWriting();
             this.Visit(expression);
-            FinalizeLLVMWriting(objPath);
-            return this.sb.ToString();
+            string bitCodeFilePath = FinalizeLLVMWriting();
+            return bitCodeFilePath;
         }
 
         /// <summary>
@@ -51,13 +52,19 @@ namespace GPUCollection
         /// <summary>
         /// Modifiying https://github.com/paulsmith/getting-started-llvm-c-api/blob/master/sum.c
         /// </summary>
-        private void FinalizeLLVMWriting(string objPath)
+        private string FinalizeLLVMWriting()
         {
             LLVM.BuildRet(mainBuilder, lastLLVMFunctionCalledFromMain);
 
             string outErrorMessage;
             LLVM.VerifyModule(module, LLVMVerifierFailureAction.LLVMAbortProcessAction, out outErrorMessage);
-            LLVM.WriteBitcodeToFile(module, objPath);
+            string fullFilePath = Path.Combine(System.IO.Directory.GetCurrentDirectory(), BitCodeFilename);
+            if (LLVM.WriteBitcodeToFile(module, fullFilePath) != 0)
+            {
+                throw new IOException($"Unable to write to {fullFilePath}");
+            }
+
+            return fullFilePath;
         }
 
         private static Expression StripQuotes(Expression e)
@@ -73,9 +80,7 @@ namespace GPUCollection
         {
             if (m.Method.DeclaringType == typeof(Queryable) && m.Method.Name == "Where")
             {
-                sb.Append("SELECT * FROM (");
                 this.Visit(m.Arguments[0]);
-                sb.Append(") AS T WHERE ");
                 LambdaExpression lambda = (LambdaExpression)StripQuotes(m.Arguments[1]);
                 this.Visit(lambda.Body);
                 return m;
@@ -95,7 +100,7 @@ namespace GPUCollection
             switch (u.NodeType)
             {
                 case ExpressionType.Not:
-                    sb.Append(" NOT ");
+                    // TODO: something meaningful
                     this.Visit(u.Operand);
                     break;
                 default:
@@ -107,32 +112,64 @@ namespace GPUCollection
 
         protected override Expression VisitBinary(BinaryExpression b)
         {
-            sb.Append("(");
             this.Visit(b.Left);
-            switch (b.NodeType)
+
+            Type retType = b.Type;
+            LLVMTypeRef llvmRetType;
+
+            if (retType == typeof(Int32))
             {
-                case ExpressionType.Add:
-                    LLVMTypeRef[] sumParamTypes = new LLVMTypeRef[] { LLVM.Int32Type(), LLVM.Int32Type() };
-                    LLVMTypeRef sumRetType = LLVM.FunctionType(LLVM.Int32Type(), sumParamTypes, false);
-                    LLVMValueRef sumFunc = LLVM.AddFunction(module, "sum" + functionNumber, sumRetType);
-
-                    LLVMBasicBlockRef entry = LLVM.AppendBasicBlock(sumFunc, "entry");
-
-                    LLVMBuilderRef sumBuilder = LLVM.CreateBuilder();
-                    LLVM.PositionBuilderAtEnd(sumBuilder, entry);
-                    LLVMValueRef tmp = LLVM.BuildAdd(sumBuilder, LLVM.GetParam(sumFunc, 0), LLVM.GetParam(sumFunc, 1), "Sum" + functionNumber + "Entry");
-                    LLVM.BuildRet(sumBuilder, tmp);
-                    lastLLVMFunctionCalledFromMain = LLVM.BuildCall(mainBuilder, sumFunc, new LLVMValueRef[] { LLVM.ConstInt(LLVM.Int32Type(), 3, new LLVMBool(0)), LLVM.ConstInt(LLVM.Int32Type(), 2, new LLVMBool(0)) }, "functioncall");
-
-                    functionNumber++;
-                    break;
-                default:
-                    throw new NotSupportedException(string.Format("The binary operator '{0}' is not supported", b.NodeType));
+                llvmRetType = LLVM.Int32Type();
+            }
+            else if (retType == typeof(Double))
+            {
+                llvmRetType = LLVM.DoubleType();
+            }
+            else if (retType == typeof(float))
+            {
+                llvmRetType = LLVM.FloatType();
+            }
+            else
+            {
+                throw new NotSupportedException(string.Format("The binary operator does not support operands of type '{0}' is not supported", retType.ToString()));
             }
 
+            LLVMTypeRef[] opParamTypes = new LLVMTypeRef[] { llvmRetType, llvmRetType };
+            LLVMTypeRef opRetType = LLVM.FunctionType(llvmRetType, opParamTypes, false);
+            LLVMValueRef opFunc = LLVM.AddFunction(module, "op" + functionNumber, opRetType);
+
+            LLVMBasicBlockRef entry = LLVM.AppendBasicBlock(opFunc, "entry");
+
+            LLVMBuilderRef opBuilder = LLVM.CreateBuilder();
+            LLVM.PositionBuilderAtEnd(opBuilder, entry);
+            LLVMValueRef tmp = GenerateOp(b.NodeType, opBuilder, opFunc);
+            LLVM.BuildRet(opBuilder, tmp);
+
+            T[] dataInArray = data.ToArray();
+            if (retType == typeof(Int32))
+                lastLLVMFunctionCalledFromMain = LLVM.BuildCall(mainBuilder, opFunc, new LLVMValueRef[] { LLVM.ConstInt(llvmRetType, Convert.ToUInt64((object)dataInArray[0]), new LLVMBool(0)), LLVM.ConstInt(llvmRetType, Convert.ToUInt64((object)dataInArray[1]), new LLVMBool(0)) }, "functioncall");
+            else
+                throw new NotSupportedException(string.Format("The binary operator does not yet support return type '{0}'", retType.Name));
+
+            functionNumber++;
+
             this.Visit(b.Right);
-            sb.Append(")");
             return b;
+        }
+
+        private LLVMValueRef GenerateOp(ExpressionType expressionType, LLVMBuilderRef opBuilder, LLVMValueRef opFunc)
+        {
+            string name = "op" + functionNumber + "Result";
+            switch (expressionType)
+            {
+                case ExpressionType.Add:
+                    return LLVM.BuildAdd(opBuilder, LLVM.GetParam(opFunc, 0), LLVM.GetParam(opFunc, 1), name);
+                case ExpressionType.Subtract:
+                    return LLVM.BuildSub(opBuilder, LLVM.GetParam(opFunc, 0), LLVM.GetParam(opFunc, 1), name);
+                default:
+                    throw new NotSupportedException(string.Format("The binary operator '{0}' is not supported", expressionType));
+            }
+
         }
 
         protected override Expression VisitConstant(ConstantExpression c)
@@ -140,30 +177,27 @@ namespace GPUCollection
             IQueryable q = c.Value as IQueryable;
             if (q != null)
             {
-                // assume constant nodes w/ IQueryables are table references
-                sb.Append("SELECT * FROM ");
-                sb.Append(q.ElementType.Name);
+                // TODO: something meaningful
             }
             else if (c.Value == null)
             {
-                sb.Append("NULL");
+                // TODO: something meaningful
             }
             else
             {
                 switch (System.Type.GetTypeCode(c.Value.GetType()))
                 {
                     case TypeCode.Boolean:
-                        sb.Append(((bool)c.Value) ? 1 : 0);
+                        // TODO: something meaningful
                         break;
                     case TypeCode.String:
-                        sb.Append("'");
-                        sb.Append(c.Value);
-                        sb.Append("'");
+                        // TODO: something meaningful
+                        // sb.Append(c.Value);
                         break;
                     case TypeCode.Object:
                         throw new NotSupportedException(string.Format("The constant for '{0}' is not supported", c.Value));
                     default:
-                        sb.Append(c.Value);
+                        // TODO: something meaningful
                         break;
                 }
             }
@@ -175,7 +209,7 @@ namespace GPUCollection
         {
             if (m.Expression != null && m.Expression.NodeType == ExpressionType.Parameter)
             {
-                sb.Append(m.Member.Name);
+                // TODO: something meaningful
                 return m;
             }
             throw new NotSupportedException(string.Format("The member '{0}' is not supported", m.Member.Name));

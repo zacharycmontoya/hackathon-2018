@@ -9,35 +9,25 @@ namespace GPUCollection
     /// <summary>
     /// Boilerplate code from https://blogs.msdn.microsoft.com/mattwar/2007/07/31/linq-building-an-iqueryable-provider-part-ii/
     /// </summary>
-    public class GPUQueryProvider : BaseQueryProvider
+    public class GPUQueryProvider<T> : BaseQueryProvider
     {
-        Object arg;
-        string objPath;
+        private IEnumerable<T> data;
 
-        public GPUQueryProvider(Object arg)
+        public GPUQueryProvider(IEnumerable<T> data)
         {
-            this.arg = arg;
-        }
-
-        public override string GetQueryText(Expression expression)
-        {
-            return this.Translate(expression);
+            this.data = data;
         }
 
         public override object Execute(Expression expression)
         {
-            objPath = "expression.bc";
             Type elementType = TypeSystem.GetElementType(expression.Type);
-            this.Translate(expression, objPath); // Call translate to compile the expression to LLVM
-            // LLVM IR to DXIL transition here
-
-
+            string bitCodePath = this.EmitBitCode(expression); // Call translate to compile the expression to LLVM
+            // Call something to take the LLVM module and run it through the rest of the pipeline
             // Get the results of the pipeline
-            float[] result = GPUOperations.Operations.Add(objPath);
-            //foreach(var resultItem in result)
-                Console.WriteLine(result.Length);
-
-            return result;
+            float[] result = GPUOperations.Operations.Add(bitCodePath);
+            int[] tempResult = Array.ConvertAll(result, x => (int)x); // Temporarily convert all results to int since we can only handle ints right now
+            Console.WriteLine(tempResult.Length);
+            return tempResult;
             //return new int[] { };
 
             /*
@@ -49,9 +39,9 @@ namespace GPUCollection
             */
         }
 
-        private string Translate(Expression expression, string objPath = null)
+        private string EmitBitCode(Expression expression)
         {
-            return new QueryTranslator().Translate(expression, objPath);
+            return new LLVMBitCodeVisitor<T>(data).WalkTree(expression);
         }
     }
 }

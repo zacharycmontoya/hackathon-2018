@@ -10,22 +10,12 @@ namespace Hackathon_MessAround_ConsoleApp1
     {
         static void Main(string[] args)
         {
-            NorthWind db = new NorthWind();
-            IQueryable<float> query = db.floats.Select(i => i + 3);
+            GPUCollection<int> collection = new GPUCollection<int>(args.Select(str => int.Parse(str)));
+
+            IQueryable<int> query = collection.Select(i => i + 3);
             Console.WriteLine($"Query:\n{query}\n");
 
             var list = query.ToList(); // TODO implement translation of expression tree to LLVM
-        }
-    }
-
-    public class NorthWind
-    {
-        public BaseQuery<float> floats;
-
-        public NorthWind()
-        {
-            BaseQueryProvider provider = new GPUQueryProvider(null);
-            this.floats = new BaseQuery<float>(provider);
         }
     }
 }
