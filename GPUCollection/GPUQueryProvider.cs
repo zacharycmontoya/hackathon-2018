@@ -36,6 +36,10 @@ namespace GPUCollection
             {
                 return Array.ConvertAll(result, x => (int)x);
             }
+            else if (typeof(T) == typeof(float))
+            {
+                return Array.ConvertAll(result, x => (float)x);
+            }
             else if (typeof(T) == typeof(double))
             {
                 return result;
