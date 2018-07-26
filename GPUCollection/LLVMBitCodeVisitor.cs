@@ -129,10 +129,30 @@ namespace GPUCollection
             switch (b.NodeType)
             {
                 case ExpressionType.Add:
-                    mainFunctionRefStack.Push(LLVM.BuildAdd(mainBuilder, first, second, name));
+                    if (b.Type == typeof(float) || b.Type == typeof(double))
+                        mainFunctionRefStack.Push(LLVM.BuildFAdd(mainBuilder, first, second, name));
+                    else
+                        mainFunctionRefStack.Push(LLVM.BuildAdd(mainBuilder, first, second, name));
                     break;
                 case ExpressionType.Subtract:
-                    mainFunctionRefStack.Push(LLVM.BuildSub(mainBuilder, first, second, name));
+                    if (b.Type == typeof(float) || b.Type == typeof(double))
+                        mainFunctionRefStack.Push(LLVM.BuildFSub(mainBuilder, first, second, name));
+                    else
+                        mainFunctionRefStack.Push(LLVM.BuildSub(mainBuilder, first, second, name));
+                    break;
+                case ExpressionType.Multiply:
+                    if (b.Type == typeof(float) || b.Type == typeof(double))
+                        mainFunctionRefStack.Push(LLVM.BuildFMul(mainBuilder, first, second, name));
+                    else
+                        mainFunctionRefStack.Push(LLVM.BuildMul(mainBuilder, first, second, name));
+                    break;
+                case ExpressionType.Divide:
+                    if (b.Type == typeof(float) || b.Type == typeof(double))
+                        mainFunctionRefStack.Push(LLVM.BuildFDiv(mainBuilder, first, second, name));
+                    else if (IsUnsignedType(b.Type))
+                        mainFunctionRefStack.Push(LLVM.BuildUDiv(mainBuilder, first, second, name));
+                    else
+                        mainFunctionRefStack.Push(LLVM.BuildSDiv(mainBuilder, first, second, name));
                     break;
                 default:
                     throw new NotSupportedException(string.Format("The binary operator '{0}' is not supported", b.NodeType));
@@ -140,6 +160,15 @@ namespace GPUCollection
             functionNumber++;
 
             return b;
+        }
+
+        private static bool IsUnsignedType(Type type)
+        {
+            return type == typeof(byte)
+                || type == typeof(char)
+                || type == typeof(uint)
+                || type == typeof(ulong)
+                || type == typeof(ushort);
         }
 
         protected override Expression VisitConstant(ConstantExpression c)
