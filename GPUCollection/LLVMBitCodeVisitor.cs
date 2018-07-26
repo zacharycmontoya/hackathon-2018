@@ -15,6 +15,20 @@ namespace GPUCollection
     {
         private const string ModuleNameString = "GPUCollection";
         private const string BitCodeFilename = "test.bc";
+        static Dictionary<Type, LLVMTypeRef> llvmTypeRefDict = new Dictionary<Type, LLVMTypeRef>()
+        {
+            { typeof(byte),   LLVM.Int8Type()   },
+            { typeof(char),   LLVM.Int16Type()  },
+            { typeof(double), LLVM.DoubleType() },
+            { typeof(float),  LLVM.FloatType()  },
+            { typeof(int),    LLVM.Int32Type()  },
+            { typeof(long),   LLVM.Int64Type()  },
+            { typeof(sbyte),  LLVM.Int8Type()   },
+            { typeof(short),  LLVM.Int16Type()  },
+            { typeof(uint),   LLVM.Int32Type()  },
+            { typeof(ulong),  LLVM.Int64Type()  },
+            { typeof(ushort), LLVM.Int32Type()  },
+        };
 
         LLVMModuleRef module;
         LLVMBuilderRef mainBuilder;
@@ -28,7 +42,7 @@ namespace GPUCollection
 
         internal string WalkTree(Expression expression)
         {
-            InitializeLLVMWriting();
+            InitializeLLVMWriting(expression);
             this.Visit(expression);
             string bitCodeFilePath = FinalizeLLVMWriting();
             return bitCodeFilePath;
@@ -37,11 +51,11 @@ namespace GPUCollection
         /// <summary>
         /// Modifiying https://github.com/paulsmith/getting-started-llvm-c-api/blob/master/sum.c
         /// </summary>
-        private void InitializeLLVMWriting()
+        private void InitializeLLVMWriting(Expression expression)
         {
             functionNumber = 0;
             module = LLVM.ModuleCreateWithName(ModuleNameString);
-            LLVMTypeRef mainRetType = LLVM.FunctionType(LLVM.Int32Type(), new LLVMTypeRef[] { LLVM.Int32Type() }, false);
+            LLVMTypeRef mainRetType = LLVM.FunctionType(GetLLVMTypeRef(expression), new LLVMTypeRef[] { GetLLVMTypeRef(expression) }, false);
             mainFunc = LLVM.AddFunction(module, "CSMain", mainRetType);
 
             mainBuilder = LLVM.CreateBuilder();
@@ -171,6 +185,26 @@ namespace GPUCollection
                 || type == typeof(ushort);
         }
 
+        private static LLVMTypeRef GetLLVMTypeRef(Expression expression)
+        {
+            Type type = expression.Type;
+            MethodCallExpression callExpression = expression as MethodCallExpression;
+            if (callExpression != null)
+            {
+                type = callExpression.Method.ReturnType;
+                if (type.IsGenericType)
+                {
+                    type = type.GetGenericArguments()[0];
+                }
+            }
+            LLVMTypeRef returnType;
+            if (!llvmTypeRefDict.TryGetValue(type, out returnType))
+            {
+                throw new NotSupportedException(string.Format("The type '{0}' is not supported", type));
+            }
+            return returnType;
+        }
+
         protected override Expression VisitConstant(ConstantExpression c)
         {
             IQueryable q = c.Value as IQueryable;
@@ -189,7 +223,11 @@ namespace GPUCollection
                     case TypeCode.Int32:
                         mainFunctionRefStack.Push(LLVM.ConstInt(LLVM.Int32Type(), Convert.ToUInt64((object)c.Value), new LLVMBool(0)));
                         break;
+                    case TypeCode.Single:
+                        mainFunctionRefStack.Push(LLVM.ConstUIToFP(LLVM.ConstInt(LLVM.Int32Type(), Convert.ToUInt64((object)c.Value), new LLVMBool(0)), LLVM.FloatType()));
+                        break;
                     case TypeCode.Double:
+                        mainFunctionRefStack.Push(LLVM.ConstUIToFP(LLVM.ConstInt(LLVM.Int32Type(), Convert.ToUInt64((object)c.Value), new LLVMBool(0)), LLVM.DoubleType()));
                         // Figure out how to create a const double
                         // mainFunctionRefStack.Push(LLVM.ConstInt(LLVM.Int32Type(), Convert.ToUInt64((object)c.Value), new LLVMBool(0)));
                         break;
