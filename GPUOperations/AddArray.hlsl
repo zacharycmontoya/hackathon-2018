@@ -1,6 +1,6 @@
 ﻿struct Data
 {
-    float v1;
+    double v1;
 };
 
 StructuredBuffer<Data> LeftInputBuffer : register(t0);

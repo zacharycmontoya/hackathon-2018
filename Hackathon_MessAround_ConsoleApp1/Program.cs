@@ -8,14 +8,41 @@ namespace Hackathon_MessAround_ConsoleApp1
 {
     class Program
     {
+        private const int BufferSize = 256;
+
         static void Main(string[] args)
         {
-            GPUCollection<int> collection = new GPUCollection<int>(args.Select(str => int.Parse(str)));
+            var random = new Random();
 
-            IQueryable<int> query = collection.Select(i => i + 3);
-            Console.WriteLine($"Query:\n{query}\n");
+            // Process a bunch of doubles
+            double[] doubleData = new double[BufferSize];            
+            for (var i = 0; i < BufferSize; i++)
+            {
+                doubleData[i] = (double)(i + 0.1);
+            }
 
-            var list = query.ToList(); // TODO implement translation of expression tree to LLVM
+            GPUCollection<double> doubleCollection = new GPUCollection<double>(doubleData);
+            IQueryable<double> doubleQuery = doubleCollection.Select(i => i + 3);
+
+            foreach (double x in doubleQuery)
+            {
+                Console.WriteLine(x);
+            }
+
+            // Process a bunch of ints
+            int[] intData = new int[BufferSize];
+            for (var i = 0; i < BufferSize; i++)
+            {
+                intData[i] = (int)(i + 0.7);
+            }
+
+            GPUCollection<int> intCollection = new GPUCollection<int>(intData);
+            IQueryable<int> intQuery = intCollection.Select(i => i + 3);
+
+            foreach (int x in intQuery)
+            {
+                Console.WriteLine(x);
+            }
         }
     }
 }

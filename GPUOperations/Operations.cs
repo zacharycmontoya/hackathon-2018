@@ -24,7 +24,7 @@ namespace GPUOperations
         private const int ShaderThreadCount = 128;
         private const int BufferSize = 65536 * ShaderThreadCount;
 
-        public static float[] Add(string objPath)
+        public static double[] Add(string objPath, double[] left, double[] right)
         {
             using (var fileStream = File.Create("AddArray.dxil"))
             {
@@ -48,44 +48,33 @@ namespace GPUOperations
             currentFence = 0;
             fenceEvent = new AutoResetEvent(false);
 
-            float[] left = new float[BufferSize];
-            float[] right = new float[BufferSize];
-
-            var random = new Random();
-
-            for (var i = 0; i < BufferSize; i++)
-            {
-                left[i] = (float)(random.NextDouble());
-                right[i] = (float)(random.NextDouble());
-            }
-
             var gpuResult = AddGpu(left, right);
 
             return gpuResult;
         }
 
-        public static float[] AddGpu(float[] left, float[] right)
+        public static double[] AddGpu(double[] left, double[] right)
         {
             if (left.Length != right.Length)
             {
                 throw new InvalidOperationException();
             }
-            long size = (sizeof(float) * left.Length);
+            long size = (sizeof(double) * left.Length);
 
-            float[] output = new float[left.Length];
+            double[] output = new double[left.Length];
 
             Resource leftInputBuffer = DirectXHelpers.CreateBuffer(device, size, HeapType.Upload, ResourceFlags.None, ResourceStates.GenericRead);
             Resource rightInputBuffer = DirectXHelpers.CreateBuffer(device, size, HeapType.Upload, ResourceFlags.None, ResourceStates.GenericRead);
             Resource outputBuffer = DirectXHelpers.CreateBuffer(device, size, HeapType.Readback, ResourceFlags.None, ResourceStates.CopyDestination);
 
-            fixed (float* pLeft = &left[0])
+            fixed (double* pLeft = &left[0])
             {
                 var mappedMemory = leftInputBuffer.Map(0);
                 Buffer.MemoryCopy(pLeft, mappedMemory.ToPointer(), size, size);
                 leftInputBuffer.Unmap(0);
             }
 
-            fixed (float* pRight = &right[0])
+            fixed (double* pRight = &right[0])
             {
                 var mappedMemory = rightInputBuffer.Map(0);
                 Buffer.MemoryCopy(pRight, mappedMemory.ToPointer(), size, size);
@@ -120,7 +109,7 @@ namespace GPUOperations
             commandList.Reset(commandAllocator, null);
             //sw.Stop();
 
-            fixed (float* pOutput = &output[0])
+            fixed (double* pOutput = &output[0])
             {
                 var mappedMemory = outputBuffer.Map(0);
                 Buffer.MemoryCopy(mappedMemory.ToPointer(), pOutput, size, size);

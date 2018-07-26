@@ -5,7 +5,7 @@ using System.Text;
 
 namespace GPUCollection
 {
-    public class GPUCollection<T> : BaseQuery<T>
+    public class GPUCollection<T> : BaseQuery<T> where T : struct
     {
         public GPUCollection(IEnumerable<T> data) : base(new GPUQueryProvider<T>(data))
         {
