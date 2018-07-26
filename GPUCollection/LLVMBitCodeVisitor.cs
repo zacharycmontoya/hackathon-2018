@@ -8,6 +8,13 @@ using System.Text;
 
 namespace GPUCollection
 {
+
+    public struct ExpressionNode<T>
+    {
+        public ExpressionType op;
+        public List<T[]> args;
+    }
+
     /// <summary>
     /// Boilerplate code from https://blogs.msdn.microsoft.com/mattwar/2007/07/31/linq-building-an-iqueryable-provider-part-ii/
     /// </summary>
@@ -22,7 +29,10 @@ namespace GPUCollection
         LLVMBuilderRef mainBuilder;
         int functionNumber;
 
-        public Stack<ExpressionType> VisitedOpTypes
+        // Index in data array
+        int currentDataIndex = 0;
+
+        public Stack<ExpressionNode<T>> VisitedOpTypes
         {
             get;
             private set;
@@ -31,7 +41,7 @@ namespace GPUCollection
         internal LLVMBitCodeVisitor(IEnumerable<T> data)
         {
             this.data = data;
-            VisitedOpTypes = new Stack<ExpressionType>();
+            VisitedOpTypes = new Stack<ExpressionNode<T>>();
         }
 
         internal string WalkTree(Expression expression)
@@ -119,7 +129,24 @@ namespace GPUCollection
 
         protected override Expression VisitBinary(BinaryExpression b)
         {
+            ExpressionNode<T> binaryOpNode = new ExpressionNode<T>();
+            binaryOpNode.args = new List<T[]>();
+
+            // Push current node to operation stack
+            VisitedOpTypes.Push(binaryOpNode);
             this.Visit(b.Left);
+
+            // Compile function
+            T[] dataInArray = data.ToArray();
+
+            // If operand is parameter add to current expresion node
+            if (b.Left.NodeType.Equals(ExpressionType.Parameter))
+                PopulateNodeWithParameter(ref binaryOpNode, dataInArray);
+
+            // Visit right operand
+            this.Visit(b.Right);
+            if (b.Right.NodeType.Equals(ExpressionType.Parameter))
+                PopulateNodeWithParameter(ref binaryOpNode, dataInArray);
 
             Type retType = b.Type;
             LLVMTypeRef llvmRetType;
@@ -141,6 +168,7 @@ namespace GPUCollection
                 throw new NotSupportedException(string.Format("The binary operator does not support operands of type '{0}' is not supported", retType.ToString()));
             }
 
+            binaryOpNode.op = b.NodeType;
             LLVMTypeRef[] opParamTypes = new LLVMTypeRef[] { llvmRetType, llvmRetType };
             LLVMTypeRef opRetType = LLVM.FunctionType(llvmRetType, opParamTypes, false);
             LLVMValueRef opFunc = LLVM.AddFunction(module, "op" + functionNumber, opRetType);
@@ -149,35 +177,37 @@ namespace GPUCollection
 
             LLVMBuilderRef opBuilder = LLVM.CreateBuilder();
             LLVM.PositionBuilderAtEnd(opBuilder, entry);
-            LLVMValueRef tmp = GenerateOp(b.NodeType, opBuilder, opFunc);
+            LLVMValueRef tmp = GenerateOp(ref binaryOpNode, opBuilder, opFunc);
             LLVM.BuildRet(opBuilder, tmp);
 
-            T[] dataInArray = data.ToArray();
+
+
             //if (retType == typeof(Int32) || retType == typeof(Double))
             if (retType == typeof(Int32))
-                lastLLVMFunctionCalledFromMain = LLVM.BuildCall(mainBuilder, opFunc, new LLVMValueRef[] { LLVM.ConstInt(llvmRetType, Convert.ToUInt64((object)dataInArray[0]), new LLVMBool(0)), LLVM.ConstInt(llvmRetType, Convert.ToUInt64((object)dataInArray[1]), new LLVMBool(0)) }, "functioncall");
+                lastLLVMFunctionCalledFromMain = LLVM.BuildCall(mainBuilder, opFunc, new LLVMValueRef[] { LLVM.ConstInt(llvmRetType, Convert.ToUInt64(binaryOpNode.args[0][0]), new LLVMBool(0)), LLVM.ConstInt(llvmRetType, Convert.ToUInt64(binaryOpNode.args[1][0]), new LLVMBool(0)) }, "functioncall");
             else
                 throw new NotSupportedException(string.Format("The binary operator does not yet support return type '{0}'", retType.Name));
 
             functionNumber++;
 
-            this.Visit(b.Right);
             return b;
         }
 
-        private LLVMValueRef GenerateOp(ExpressionType expressionType, LLVMBuilderRef opBuilder, LLVMValueRef opFunc)
+        private LLVMValueRef GenerateOp(ref ExpressionNode<T> opNode, LLVMBuilderRef opBuilder, LLVMValueRef opFunc)
         {
             string name = "op" + functionNumber + "Result";
-            switch (expressionType)
+
+            switch (opNode.op)
             {
                 case ExpressionType.Add:
-                    VisitedOpTypes.Push(ExpressionType.Add);
+
+
                     return LLVM.BuildAdd(opBuilder, LLVM.GetParam(opFunc, 0), LLVM.GetParam(opFunc, 1), name);
                 case ExpressionType.Subtract:
-                    VisitedOpTypes.Push(ExpressionType.Subtract);
+
                     return LLVM.BuildSub(opBuilder, LLVM.GetParam(opFunc, 0), LLVM.GetParam(opFunc, 1), name);
                 default:
-                    throw new NotSupportedException(string.Format("The binary operator '{0}' is not supported", expressionType));
+                    throw new NotSupportedException(string.Format("The binary operator '{0}' is not supported", opNode.op));
             }
 
         }
@@ -206,6 +236,13 @@ namespace GPUCollection
                         break;
                     case TypeCode.Object:
                         throw new NotSupportedException(string.Format("The constant for '{0}' is not supported", c.Value));
+                    case TypeCode.Int32:
+                        if (typeof(T) == typeof(Int32))
+                        {
+                            var currentNode = VisitedOpTypes.Peek();
+                            currentNode.args.Add(new T[] { (T)c.Value });
+                        }
+                        break;
                     default:
                         // TODO: something meaningful
                         break;
@@ -213,6 +250,17 @@ namespace GPUCollection
             }
 
             return c;
+        }
+
+        protected void PopulateNodeWithParameter(ref ExpressionNode<T> binaryOpNode, T[] dataInArray)
+        {
+            {
+                if (currentDataIndex >= dataInArray.Length)
+                    throw new Exception();
+
+                // TODO - This assumes data is left-hand operand
+                binaryOpNode.args.Add(dataInArray);
+            }
         }
 
         protected override Expression VisitMember(MemberExpression m)

@@ -67,12 +67,12 @@ namespace GPUCollection
         // Temporary work: use input values as doubles so that we can operate on the data using one shader
         private object ExecutionDispatch(string bitCodePath, double[][] input, LLVMBitCodeVisitor<T> visitor)
         {
-            Stack<ExpressionType> opStack = visitor.VisitedOpTypes;
+            Stack<ExpressionNode<T>> opStack = visitor.VisitedOpTypes;
             double[] tempResult = new double[0];
             // Currently only support for a single instruction - refactor to accomodate data-passing pipeline
             while (opStack.Count > 0)
             {
-                ExpressionType op = opStack.Pop();
+                ExpressionType op = opStack.Pop().op;
 
                 switch (op)
                 {
