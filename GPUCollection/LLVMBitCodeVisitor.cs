@@ -22,9 +22,16 @@ namespace GPUCollection
         LLVMBuilderRef mainBuilder;
         int functionNumber;
 
+        public Stack<ExpressionType> VisitedOpTypes
+        {
+            get;
+            private set;
+        }
+
         internal LLVMBitCodeVisitor(IEnumerable<T> data)
         {
             this.data = data;
+            VisitedOpTypes = new Stack<ExpressionType>();
         }
 
         internal string WalkTree(Expression expression)
@@ -146,6 +153,7 @@ namespace GPUCollection
             LLVM.BuildRet(opBuilder, tmp);
 
             T[] dataInArray = data.ToArray();
+            //if (retType == typeof(Int32) || retType == typeof(Double))
             if (retType == typeof(Int32))
                 lastLLVMFunctionCalledFromMain = LLVM.BuildCall(mainBuilder, opFunc, new LLVMValueRef[] { LLVM.ConstInt(llvmRetType, Convert.ToUInt64((object)dataInArray[0]), new LLVMBool(0)), LLVM.ConstInt(llvmRetType, Convert.ToUInt64((object)dataInArray[1]), new LLVMBool(0)) }, "functioncall");
             else
@@ -163,8 +171,10 @@ namespace GPUCollection
             switch (expressionType)
             {
                 case ExpressionType.Add:
+                    VisitedOpTypes.Push(ExpressionType.Add);
                     return LLVM.BuildAdd(opBuilder, LLVM.GetParam(opFunc, 0), LLVM.GetParam(opFunc, 1), name);
                 case ExpressionType.Subtract:
+                    VisitedOpTypes.Push(ExpressionType.Subtract);
                     return LLVM.BuildSub(opBuilder, LLVM.GetParam(opFunc, 0), LLVM.GetParam(opFunc, 1), name);
                 default:
                     throw new NotSupportedException(string.Format("The binary operator '{0}' is not supported", expressionType));
