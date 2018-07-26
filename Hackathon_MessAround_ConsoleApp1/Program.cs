@@ -13,7 +13,7 @@ namespace Hackathon_MessAround_ConsoleApp1
         static void Main(string[] args)
         {
             var random = new Random();
-
+            /*
             // Process a bunch of doubles
             double[] doubleData = new double[BufferSize];            
             for (var i = 0; i < BufferSize; i++)
@@ -28,7 +28,7 @@ namespace Hackathon_MessAround_ConsoleApp1
             {
                 Console.WriteLine(x);
             }
-
+            */
             // Process a bunch of ints
             int[] intData = new int[BufferSize];
             for (var i = 0; i < BufferSize; i++)
@@ -37,7 +37,7 @@ namespace Hackathon_MessAround_ConsoleApp1
             }
 
             GPUCollection<int> intCollection = new GPUCollection<int>(intData);
-            IQueryable<int> intQuery = intCollection.Select(i => i + 3);
+            IQueryable<int> intQuery = intCollection.Select(i => (i - 3 + 5));
 
             foreach (int x in intQuery)
             {
