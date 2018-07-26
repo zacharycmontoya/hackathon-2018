@@ -20,9 +20,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="AddArray.dxil">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
     <None Update="AddArray.hlsl">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>

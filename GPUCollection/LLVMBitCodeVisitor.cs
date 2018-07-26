@@ -11,7 +11,7 @@ namespace GPUCollection
     /// <summary>
     /// Boilerplate code from https://blogs.msdn.microsoft.com/mattwar/2007/07/31/linq-building-an-iqueryable-provider-part-ii/
     /// </summary>
-    class LLVMBitCodeVisitor<T> : ExpressionVisitor
+    class LLVMBitCodeVisitor<T> : ExpressionVisitor where T : struct
     {
         private const string ModuleNameString = "GPUCollection";
         private const string BitCodeFilename = "test.bc";
