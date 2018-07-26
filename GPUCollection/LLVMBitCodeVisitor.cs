@@ -11,20 +11,19 @@ namespace GPUCollection
     /// <summary>
     /// Boilerplate code from https://blogs.msdn.microsoft.com/mattwar/2007/07/31/linq-building-an-iqueryable-provider-part-ii/
     /// </summary>
-    class LLVMBitCodeVisitor<T> : ExpressionVisitor where T : struct
+    class LLVMBitCodeVisitor : ExpressionVisitor
     {
         private const string ModuleNameString = "GPUCollection";
         private const string BitCodeFilename = "test.bc";
 
-        IEnumerable<T> data;
-        LLVMValueRef lastLLVMFunctionCalledFromMain;
         LLVMModuleRef module;
         LLVMBuilderRef mainBuilder;
+        LLVMValueRef mainFunc;
         int functionNumber;
+        Stack<LLVMValueRef> mainFunctionRefStack;
 
-        internal LLVMBitCodeVisitor(IEnumerable<T> data)
+        internal LLVMBitCodeVisitor()
         {
-            this.data = data;
         }
 
         internal string WalkTree(Expression expression)
@@ -42,11 +41,15 @@ namespace GPUCollection
         {
             functionNumber = 0;
             module = LLVM.ModuleCreateWithName(ModuleNameString);
-            LLVMTypeRef mainRetType = LLVM.FunctionType(LLVM.Int32Type(), new LLVMTypeRef[0], false);
-            LLVMValueRef mainFunc = LLVM.AddFunction(module, "main", mainRetType);
+            LLVMTypeRef mainRetType = LLVM.FunctionType(LLVM.Int32Type(), new LLVMTypeRef[] { LLVM.Int32Type() }, false);
+            mainFunc = LLVM.AddFunction(module, "CSMain", mainRetType);
+
             mainBuilder = LLVM.CreateBuilder();
-            LLVMBasicBlockRef mainBlock = LLVM.AppendBasicBlock(mainFunc, "MainEntry");
+            LLVMBasicBlockRef mainBlock = LLVM.AppendBasicBlock(mainFunc, "EntryBlock");
             LLVM.PositionBuilderAtEnd(mainBuilder, mainBlock);
+
+            // Initialize the first statement as a constant
+            mainFunctionRefStack = new Stack<LLVMValueRef>();
         }
 
         /// <summary>
@@ -54,7 +57,7 @@ namespace GPUCollection
         /// </summary>
         private string FinalizeLLVMWriting()
         {
-            LLVM.BuildRet(mainBuilder, lastLLVMFunctionCalledFromMain);
+            LLVM.BuildRet(mainBuilder, mainFunctionRefStack.Pop());
 
             string outErrorMessage;
             LLVM.VerifyModule(module, LLVMVerifierFailureAction.LLVMAbortProcessAction, out outErrorMessage);
@@ -109,67 +112,34 @@ namespace GPUCollection
 
             return u;
         }
+        protected override Expression VisitParameter(ParameterExpression node)
+        {
+            mainFunctionRefStack.Push(LLVM.GetParam(mainFunc, 0));
+            return node;
+        }
 
         protected override Expression VisitBinary(BinaryExpression b)
         {
             this.Visit(b.Left);
-
-            Type retType = b.Type;
-            LLVMTypeRef llvmRetType;
-
-            if (retType == typeof(Int32))
-            {
-                llvmRetType = LLVM.Int32Type();
-            }
-            else if (retType == typeof(Double))
-            {
-                llvmRetType = LLVM.DoubleType();
-            }
-            else if (retType == typeof(float))
-            {
-                llvmRetType = LLVM.FloatType();
-            }
-            else
-            {
-                throw new NotSupportedException(string.Format("The binary operator does not support operands of type '{0}' is not supported", retType.ToString()));
-            }
-
-            LLVMTypeRef[] opParamTypes = new LLVMTypeRef[] { llvmRetType, llvmRetType };
-            LLVMTypeRef opRetType = LLVM.FunctionType(llvmRetType, opParamTypes, false);
-            LLVMValueRef opFunc = LLVM.AddFunction(module, "op" + functionNumber, opRetType);
-
-            LLVMBasicBlockRef entry = LLVM.AppendBasicBlock(opFunc, "entry");
-
-            LLVMBuilderRef opBuilder = LLVM.CreateBuilder();
-            LLVM.PositionBuilderAtEnd(opBuilder, entry);
-            LLVMValueRef tmp = GenerateOp(b.NodeType, opBuilder, opFunc);
-            LLVM.BuildRet(opBuilder, tmp);
-
-            T[] dataInArray = data.ToArray();
-            if (retType == typeof(Int32))
-                lastLLVMFunctionCalledFromMain = LLVM.BuildCall(mainBuilder, opFunc, new LLVMValueRef[] { LLVM.ConstInt(llvmRetType, Convert.ToUInt64((object)dataInArray[0]), new LLVMBool(0)), LLVM.ConstInt(llvmRetType, Convert.ToUInt64((object)dataInArray[1]), new LLVMBool(0)) }, "functioncall");
-            else
-                throw new NotSupportedException(string.Format("The binary operator does not yet support return type '{0}'", retType.Name));
-
-            functionNumber++;
-
             this.Visit(b.Right);
-            return b;
-        }
 
-        private LLVMValueRef GenerateOp(ExpressionType expressionType, LLVMBuilderRef opBuilder, LLVMValueRef opFunc)
-        {
             string name = "op" + functionNumber + "Result";
-            switch (expressionType)
+            var second = mainFunctionRefStack.Pop();
+            var first = mainFunctionRefStack.Pop();
+            switch (b.NodeType)
             {
                 case ExpressionType.Add:
-                    return LLVM.BuildAdd(opBuilder, LLVM.GetParam(opFunc, 0), LLVM.GetParam(opFunc, 1), name);
+                    mainFunctionRefStack.Push(LLVM.BuildAdd(mainBuilder, first, second, name));
+                    break;
                 case ExpressionType.Subtract:
-                    return LLVM.BuildSub(opBuilder, LLVM.GetParam(opFunc, 0), LLVM.GetParam(opFunc, 1), name);
+                    mainFunctionRefStack.Push(LLVM.BuildSub(mainBuilder, first, second, name));
+                    break;
                 default:
-                    throw new NotSupportedException(string.Format("The binary operator '{0}' is not supported", expressionType));
+                    throw new NotSupportedException(string.Format("The binary operator '{0}' is not supported", b.NodeType));
             }
+            functionNumber++;
 
+            return b;
         }
 
         protected override Expression VisitConstant(ConstantExpression c)
@@ -187,12 +157,12 @@ namespace GPUCollection
             {
                 switch (System.Type.GetTypeCode(c.Value.GetType()))
                 {
-                    case TypeCode.Boolean:
-                        // TODO: something meaningful
+                    case TypeCode.Int32:
+                        mainFunctionRefStack.Push(LLVM.ConstInt(LLVM.Int32Type(), Convert.ToUInt64((object)c.Value), new LLVMBool(0)));
                         break;
-                    case TypeCode.String:
-                        // TODO: something meaningful
-                        // sb.Append(c.Value);
+                    case TypeCode.Double:
+                        // Figure out how to create a const double
+                        // mainFunctionRefStack.Push(LLVM.ConstInt(LLVM.Int32Type(), Convert.ToUInt64((object)c.Value), new LLVMBool(0)));
                         break;
                     case TypeCode.Object:
                         throw new NotSupportedException(string.Format("The constant for '{0}' is not supported", c.Value));
